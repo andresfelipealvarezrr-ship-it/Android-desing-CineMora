@@ -1,3 +1,4 @@
+
 package com.example.cinemora.ui.screen
 
 import androidx.compose.foundation.layout.Box
@@ -19,9 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+
 import com.example.cinemora.ui.components.Fondo
 import com.example.cinemora.ui.components.Morado
 import com.example.cinemora.ui.components.TextoSecundario
+
 import com.example.cinemora.viewmodel.AgregarContenidoViewModel
 import com.example.cinemora.viewmodel.CineMoraAppViewModel
 import com.example.cinemora.viewmodel.Destino
@@ -37,34 +40,116 @@ fun CineMoraApp(
     detalleViewModel: DetalleViewModel = viewModel(),
     agregarViewModel: AgregarContenidoViewModel = viewModel()
 ) {
+
     val destino by appViewModel.destino.collectAsStateWithLifecycle()
+
     val seleccionado by appViewModel.seleccionado.collectAsStateWithLifecycle()
-    Scaffold(containerColor = Fondo, bottomBar = {
-        if (destino != Destino.DETALLE) NavigationBar(containerColor = Fondo) {
-            NavItem(destino == Destino.INICIO, "Inicio", { Icon(Icons.Default.Home, null) }) { appViewModel.navegar(Destino.INICIO) }
-            NavItem(destino == Destino.LISTA, "Mi lista", { Icon(Icons.Default.Bookmark, null) }) { appViewModel.navegar(Destino.LISTA) }
-            NavItem(destino == Destino.AGREGAR, "Agregar", { Icon(Icons.Default.Add, null) }) { appViewModel.navegar(Destino.AGREGAR) }
+
+    Scaffold(
+        containerColor = Fondo,
+
+        bottomBar = {
+
+            // Ocultar barra inferior en Detalle y Perfil
+            if (
+                destino != Destino.DETALLE &&
+                destino != Destino.PERFIL
+            ) {
+
+                NavigationBar(
+                    containerColor = Fondo
+                ) {
+
+                    NavItem(
+                        destino == Destino.INICIO,
+                        "Inicio",
+                        { Icon(Icons.Default.Home, null) }
+                    ) {
+                        appViewModel.navegar(Destino.INICIO)
+                    }
+
+                    NavItem(
+                        destino == Destino.LISTA,
+                        "Mi lista",
+                        { Icon(Icons.Default.Bookmark, null) }
+                    ) {
+                        appViewModel.navegar(Destino.LISTA)
+                    }
+
+                    NavItem(
+                        destino == Destino.AGREGAR,
+                        "Agregar",
+                        { Icon(Icons.Default.Add, null) }
+                    ) {
+                        appViewModel.navegar(Destino.AGREGAR)
+                    }
+                }
+            }
         }
-    }) { padding ->
-        Box(Modifier.padding(padding)) {
+
+    ) { padding ->
+
+        Box(
+            Modifier.padding(padding)
+        ) {
+
             when (destino) {
-                Destino.INICIO -> HomeScreen(homeViewModel, appViewModel::abrirDetalle)
-                Destino.LISTA -> MiListaScreen(listaViewModel, appViewModel::abrirDetalle) { appViewModel.navegar(Destino.INICIO) }
-                Destino.AGREGAR -> AgregarContenidoScreen(agregarViewModel)
+
+                Destino.INICIO -> HomeScreen(
+                    viewModel = homeViewModel,
+                    onAbrir = appViewModel::abrirDetalle,
+
+                    // NUEVA NAVEGACIÓN A PERFIL
+                    onNavigateToProfile = {
+                        appViewModel.navegar(Destino.PERFIL)
+                    }
+                )
+
+                Destino.LISTA -> MiListaScreen(
+                    listaViewModel,
+                    appViewModel::abrirDetalle
+                ) {
+                    appViewModel.navegar(Destino.INICIO)
+                }
+
+                Destino.AGREGAR -> AgregarContenidoScreen(
+                    agregarViewModel
+                )
+
                 Destino.DETALLE -> DetalleScreen(
                     item = seleccionado,
                     viewModel = detalleViewModel,
-                    onPlay = { appViewModel.navegar(Destino.REPRODUCTOR) },
-                    onTrailer = { appViewModel.navegar(Destino.TRAILER) },
-                    onBack = { appViewModel.navegar(Destino.INICIO) }
+                    onPlay = {
+                        appViewModel.navegar(Destino.REPRODUCTOR)
+                    },
+                    onTrailer = {
+                        appViewModel.navegar(Destino.TRAILER)
+                    },
+                    onBack = {
+                        appViewModel.navegar(Destino.INICIO)
+                    }
                 )
+
                 Destino.REPRODUCTOR -> VideoPlayerScreen(
                     contenido = seleccionado,
-                    onBack = { appViewModel.navegar(Destino.DETALLE) }
+                    onBack = {
+                        appViewModel.navegar(Destino.DETALLE)
+                    }
                 )
+
                 Destino.TRAILER -> TrailerPlayerScreen(
                     contenido = seleccionado,
-                    onBack = { appViewModel.navegar(Destino.DETALLE) }
+                    onBack = {
+                        appViewModel.navegar(Destino.DETALLE)
+                    }
+                )
+
+                // NUEVA PANTALLA DE PERFIL
+                Destino.PERFIL -> ProfileScreen(
+                    username = "usuario_demo",
+                    onBack = {
+                        appViewModel.navegar(Destino.INICIO)
+                    }
                 )
             }
         }
@@ -72,12 +157,20 @@ fun CineMoraApp(
 }
 
 @Composable
-private fun RowScope.NavItem(selected: Boolean, label: String, icon: @Composable () -> Unit, onClick: () -> Unit) =
+private fun RowScope.NavItem(
+    selected: Boolean,
+    label: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
         icon = icon,
-        label = { Text(label) },
+        label = {
+            Text(label)
+        },
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = Color.White,
             selectedTextColor = Color.White,
@@ -86,3 +179,4 @@ private fun RowScope.NavItem(selected: Boolean, label: String, icon: @Composable
             unselectedTextColor = TextoSecundario
         )
     )
+}
