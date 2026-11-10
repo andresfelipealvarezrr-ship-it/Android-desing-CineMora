@@ -1,4 +1,4 @@
-package com.example.cinemora.data.remote.dto
+package com.example.cinemora.data.dto
 
 data class TmdbContenidoDto(
     val id: Int,

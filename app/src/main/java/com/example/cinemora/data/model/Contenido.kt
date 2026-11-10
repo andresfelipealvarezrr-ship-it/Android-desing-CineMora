@@ -1,7 +1,7 @@
-package com.example.cinemora.model
+package com.example.cinemora.data.model
 
 data class Contenido(
-    val id: Int,
+    val id: String,
     val titulo: String,
     val sinopsis: String,
     val fechaLanzamiento: String,
@@ -13,4 +13,10 @@ data class Contenido(
     val trailerYoutubeId: String? = null,
     val posterUrl: String? = null,
     val tmdbId: Int? = null
-)
+) {
+    val esManual: Boolean
+        get() = id.startsWith("manual:")
+
+    val anio: String
+        get() = fechaLanzamiento.take(4).takeIf { it.length == 4 && it.all(Char::isDigit) } ?: "Sin fecha"
+}

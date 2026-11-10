@@ -1,8 +1,8 @@
-package com.example.cinemora.data.remote
+package com.example.cinemora.data.api
 
 import com.example.cinemora.BuildConfig
-import com.example.cinemora.data.remote.dto.TmdbContenidoDto
-import com.example.cinemora.model.Contenido
+import com.example.cinemora.data.dto.TmdbContenidoDto
+import com.example.cinemora.data.model.Contenido
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -123,7 +123,7 @@ object TmdbApiService {
     }
 
     private fun TmdbContenidoDto.toContenido() = Contenido(
-        id = id,
+        id = "tmdb:$tipo:$id",
         titulo = titulo,
         sinopsis = sinopsis,
         fechaLanzamiento = fecha.ifBlank { "Sin fecha" },
