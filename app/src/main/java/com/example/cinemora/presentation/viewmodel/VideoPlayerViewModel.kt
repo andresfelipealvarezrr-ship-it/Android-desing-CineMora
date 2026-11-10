@@ -1,4 +1,4 @@
-package com.example.cinemora.viewmodel
+package com.example.cinemora.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

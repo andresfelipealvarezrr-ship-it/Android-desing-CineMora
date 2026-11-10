@@ -1,4 +1,4 @@
-package com.example.cinemora.ui.screen
+package com.example.cinemora.presentation.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -26,8 +26,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.cinemora.model.Contenido
-import com.example.cinemora.viewmodel.TrailerPlayerViewModel
+import com.example.cinemora.data.model.Contenido
+import com.example.cinemora.presentation.viewmodel.TrailerPlayerViewModel
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView

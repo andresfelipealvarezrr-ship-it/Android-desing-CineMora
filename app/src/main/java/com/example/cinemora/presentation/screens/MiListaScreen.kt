@@ -1,7 +1,6 @@
-package com.example.cinemora.ui.screen
+package com.example.cinemora.presentation.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,22 +11,30 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.cinemora.model.Contenido
-import com.example.cinemora.ui.components.*
-import com.example.cinemora.viewmodel.MiListaViewModel
+import com.example.cinemora.data.model.Contenido
+import com.example.cinemora.presentation.components.*
+import com.example.cinemora.presentation.viewmodel.MiListaViewModel
 
 @Composable
 fun MiListaScreen(viewModel: MiListaViewModel, onAbrir: (Contenido) -> Unit, onExplorar: () -> Unit) {
     val lista by viewModel.contenidos.collectAsStateWithLifecycle()
+    var filtro by rememberSaveable { mutableStateOf("todos") }
+    val visibles = when (filtro) {
+        "películas" -> lista.filter { it.tipo.startsWith("película") }
+        "series" -> lista.filter { it.tipo == "serie" }
+        else -> lista
+    }
     Column(Modifier.fillMaxSize()) {
         BrandHeader()
         Column(Modifier.padding(horizontal = 14.dp)) {
@@ -37,9 +44,9 @@ fun MiListaScreen(viewModel: MiListaViewModel, onAbrir: (Contenido) -> Unit, onE
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                FilterChip(true, { }, { Text("Todos (${lista.size})", fontSize = 10.sp) })
-                FilterChip(false, { }, { Text("Películas", fontSize = 10.sp) })
-                FilterChip(false, { }, { Text("Series", fontSize = 10.sp) })
+                FilterChip(filtro == "todos", { filtro = "todos" }, { Text("Todos (${lista.size})", fontSize = 10.sp) })
+                FilterChip(filtro == "películas", { filtro = "películas" }, { Text("Películas", fontSize = 10.sp) })
+                FilterChip(filtro == "series", { filtro = "series" }, { Text("Series", fontSize = 10.sp) })
             }
             Spacer(Modifier.height(12.dp))
         }
@@ -56,26 +63,18 @@ fun MiListaScreen(viewModel: MiListaViewModel, onAbrir: (Contenido) -> Unit, onE
                 }
                 item { RecommendationCard() }
             }
+        } else if (visibles.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No hay títulos guardados en esta categoría.", color = TextoSecundario)
+            }
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(lista, key = { "${it.tipo}-${it.id}" }) { item ->
-                    Card(Modifier.fillMaxWidth().clickable { onAbrir(item) }, colors = CardDefaults.cardColors(Tarjeta), shape = RoundedCornerShape(12.dp)) {
-                        Row(Modifier.fillMaxWidth().height(122.dp).padding(10.dp)) {
-                            Poster(item, Modifier.width(72.dp).fillMaxHeight().background(Color(0xFF2B2838), RoundedCornerShape(8.dp)))
-                            Spacer(Modifier.width(11.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("${item.fechaLanzamiento.take(4)} · ${item.tipo}", color = TextoSecundario, fontSize = 9.sp)
-                                Text(item.titulo, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(item.sinopsis, color = Color(0xFFCCC5D1), fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Spacer(Modifier.weight(1f))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Ver detalle ›", color = Color(0xFFE3B8FF), fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                    Spacer(Modifier.weight(1f))
-                                    TextButton(onClick = { viewModel.quitar(item) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Icon(Icons.Default.BookmarkRemove, null, modifier = Modifier.size(15.dp)); Text(" Quitar", fontSize = 10.sp) }
-                                }
-                            }
-                        }
-                    }
+                items(visibles, key = Contenido::id) { item ->
+                    ContenidoGuardadoCard(
+                        item = item,
+                        onAbrir = { onAbrir(item) },
+                        onQuitar = { viewModel.quitar(item) }
+                    )
                 }
                 item { RecommendationCard() }
             }

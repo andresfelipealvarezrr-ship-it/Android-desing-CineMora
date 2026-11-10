@@ -1,11 +1,13 @@
-package com.example.cinemora.viewmodel
+package com.example.cinemora.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
-import com.example.cinemora.model.Contenido
-import com.example.cinemora.repository.CineRepository
+import com.example.cinemora.data.model.Contenido
+import com.example.cinemora.data.repository.CineRepository
 
 class DetalleViewModel : ViewModel() {
     val miLista = CineRepository.miLista
+
+    fun eliminarContenidoManual(contenido: Contenido) = CineRepository.eliminarContenidoManual(contenido)
 
     fun alternarGuardado(contenido: Contenido, guardado: Boolean) {
         if (guardado) CineRepository.quitarDeMiLista(contenido)

@@ -1,4 +1,4 @@
-package com.example.cinemora.ui.screen
+package com.example.cinemora.presentation.screens
 
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
@@ -32,8 +32,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.cinemora.model.Contenido
-import com.example.cinemora.viewmodel.VideoPlayerViewModel
+import com.example.cinemora.data.model.Contenido
+import com.example.cinemora.presentation.viewmodel.VideoPlayerViewModel
 
 @Composable
 fun VideoPlayerScreen(contenido: Contenido?, onBack: () -> Unit, viewModel: VideoPlayerViewModel = viewModel()) {

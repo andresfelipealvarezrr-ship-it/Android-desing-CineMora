@@ -1,7 +1,7 @@
-package com.example.cinemora.viewmodel
+package com.example.cinemora.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
-import com.example.cinemora.repository.CineRepository
+import com.example.cinemora.data.repository.CineRepository
 
 class HomeViewModel : ViewModel() {
     val catalogo = CineRepository.catalogo

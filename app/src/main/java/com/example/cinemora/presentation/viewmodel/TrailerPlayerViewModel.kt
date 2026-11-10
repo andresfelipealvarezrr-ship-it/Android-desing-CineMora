@@ -1,9 +1,9 @@
-package com.example.cinemora.viewmodel
+package com.example.cinemora.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.cinemora.data.remote.TmdbClient
-import com.example.cinemora.model.Contenido
+import com.example.cinemora.data.network.TmdbClient
+import com.example.cinemora.data.model.Contenido
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch

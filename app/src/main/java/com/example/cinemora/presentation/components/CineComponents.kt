@@ -1,4 +1,4 @@
-package com.example.cinemora.ui.components
+package com.example.cinemora.presentation.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,7 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.cinemora.model.Contenido
+import com.example.cinemora.data.model.Contenido
 import coil3.compose.AsyncImage
 
 val Fondo = Color(0xFF131318)

@@ -1,4 +1,4 @@
-package com.example.cinemora.ui.screen
+package com.example.cinemora.presentation.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,8 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
-import com.example.cinemora.ui.components.Fondo
-import com.example.cinemora.ui.components.Morado
+import com.example.cinemora.presentation.components.Fondo
+import com.example.cinemora.presentation.components.Morado
 
 /** Pantalla de perfil de demostración; no requiere sesión de usuario. */
 @OptIn(ExperimentalMaterial3Api::class)
