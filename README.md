@@ -1,6 +1,6 @@
 # CineMora
 
-Proyecto de diseño de una aplicación Android para consultar contenido cinematográfico, organizar listas personales y guardar preferencias.
+Aplicación Android para explorar películas y series, registrar títulos y organizar una lista personal.
 
 ## Prototipo UI/UX
 
@@ -8,7 +8,11 @@ Ver prototipo en [Google Stitch](https://stitch.withgoogle.com/projects/10239007
 
 Ver diagrama en [Mermaid Live Editor](https://mermaid.live/edit#pako:eNptUctOwzAQ_BVrTyCSKg3Oy-KCWipx4MQNVUJuYlIrsV38UEtL_53EkFBafLFn1jOeXR-gVBUDAmVLjZlzWmsqlhJ1615yQVt09xmGaO7K5pJdcLO-ZF_YStM_NEE3XFpEa3ZOP1vNZY1qJiumT4u9xDxR0R2vrs8Kglo2kD62j3f4JtBoumK0malW6bFgtlwMwg6-O1o2Az6e-vWNjX5hn93wPXuUC8bsSJdUPlD7r96P4DfQSqkWcfO65W01ktrJUQsB1JpXQKx2LADBtKA9BO-xBLtmgi2BdEfNKrcLK6qbsPTNwVL2-g2VL0qJwUIrV6-BvNHWdMhtqm5mP787XvFDnyknLZA49hZADrADMs3jSREXcbenCY5wEcAHkCSbFEWGC5ynWY6LaY6PAez9o9EkxbdpjtN8GmdREkfJ8Qtl0bQM)
 
-## Diagrama entidad-relación
+## Arquitectura implementada
+
+[Avance 1 · Arquitectura y flujo de ejecución](docs/tutorial_arquitectura.md)
+
+## Diagrama entidad-relación propuesto
 
 ```mermaid
 erDiagram
@@ -61,7 +65,7 @@ erDiagram
     GENERO ||--o{ CONTENIDO_GENERO : agrupa
 ```
 
-## Diagrama de arquitectura
+## Diseño previsto para persistencia y acceso remoto
 
 ```mermaid
 flowchart TD
@@ -80,7 +84,7 @@ flowchart TD
     G --> K[DataStore: Preferencias]
 ```
 
-## Pantallas planificadas
+## Alcance inicial de las pantallas
 
 1. Inicio y exploración de películas o series.
 2. Detalle de contenido: título, sinopsis, géneros, puntuación y póster.
