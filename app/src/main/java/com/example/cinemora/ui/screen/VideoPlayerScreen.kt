@@ -37,12 +37,27 @@ import com.example.cinemora.viewmodel.VideoPlayerViewModel
 
 @Composable
 fun VideoPlayerScreen(contenido: Contenido?, onBack: () -> Unit, viewModel: VideoPlayerViewModel = viewModel()) {
+    if (contenido == null) {
+        BackHandler(onBack = onBack)
+        Column(
+            modifier = Modifier.fillMaxSize().background(Color(0xFF08080C)),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.Start).padding(8.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+            }
+            Text("Contenido no encontrado", color = Color.White)
+        }
+        return
+    }
+
     val context = LocalContext.current
     val rootView = LocalView.current
     val errorMessage by viewModel.error.collectAsStateWithLifecycle()
-    val player = remember(contenido?.videoUrl) {
+    val player = remember(contenido.videoUrl) {
         ExoPlayer.Builder(context).build().apply {
-            contenido?.videoUrl?.let { setMediaItem(MediaItem.fromUri(it)) }
+            contenido.videoUrl?.let { setMediaItem(MediaItem.fromUri(it)) }
             prepare()
             playWhenReady = true
             addListener(object : Player.Listener {
@@ -70,7 +85,7 @@ fun VideoPlayerScreen(contenido: Contenido?, onBack: () -> Unit, viewModel: Vide
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.Start).padding(8.dp)) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
         }
-        Text(contenido?.titulo ?: "Reproductor", color = Color.White, style = MaterialTheme.typography.titleLarge)
+        Text(contenido.titulo, color = Color.White, style = MaterialTheme.typography.titleLarge)
         AndroidView(
             factory = {
                 PlayerView(it).apply {

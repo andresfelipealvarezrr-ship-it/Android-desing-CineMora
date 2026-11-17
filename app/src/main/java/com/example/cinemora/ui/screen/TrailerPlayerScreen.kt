@@ -34,6 +34,22 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTube
 
 @Composable
 fun TrailerPlayerScreen(contenido: Contenido?, onBack: () -> Unit, viewModel: TrailerPlayerViewModel = viewModel()) {
+    if (contenido == null) {
+        BackHandler(onBack = onBack)
+        Column(
+            Modifier.fillMaxSize().background(Color(0xFF08080C)),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.Start).padding(8.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+            }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Contenido no encontrado", color = Color.White)
+            }
+        }
+        return
+    }
+
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val videoId by viewModel.videoId.collectAsStateWithLifecycle()

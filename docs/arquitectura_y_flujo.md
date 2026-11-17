@@ -6,7 +6,7 @@
 
 CineMora es una aplicación Android para explorar contenido cinematográfico y organizar una lista personal. El usuario puede ver un catálogo, abrir el detalle de un título, añadirlo o retirarlo de **Mi lista**, agregar un título local, abrir tráileres y reproducir algunos contenidos con URL de video. También existe una pantalla de perfil de demostración.
 
-El proyecto contiene un único módulo Android (`app`) y está escrito en Kotlin. Usa Jetpack Compose y Material 3 para la UI; `ViewModel`, corrutinas y `StateFlow` para estado; Coil para pósteres de URL; Media3 ExoPlayer para video; Android YouTube Player para tráileres; y `HttpURLConnection` con `org.json` para consultar TMDB. El permiso `INTERNET` se declara en `app/src/main/AndroidManifest.xml`.
+El proyecto contiene un único módulo Android (`app`) y está escrito en Kotlin. Usa Jetpack Compose y Material 3 para la UI; Navigation Compose y Kotlin Serialization para las rutas tipadas; `ViewModel`, corrutinas y `StateFlow` para estado; Coil para pósteres de URL; Media3 ExoPlayer para video; Android YouTube Player para tráileres; y `HttpURLConnection` con `org.json` para consultar TMDB. El permiso `INTERNET` se declara en `app/src/main/AndroidManifest.xml`.
 
 El catálogo inicia con contenido local en `CineRepository`. Al crearse ese repositorio intenta enriquecer dichos títulos y añadir tendencias de TMDB. La lista del usuario y el catálogo modificado viven solamente en memoria.
 
@@ -44,7 +44,6 @@ Android-desing-CineMora/
         │   │   │   └── dto/TmdbContenidoDto.kt # DTO temporal de TMDB.
         │   │   ├── repository/CineRepository.kt # Estado compartido del catálogo/lista.
         │   │   ├── viewmodel/
-        │   │   │   ├── CineMoraAppViewModel.kt # Navegación y selección.
         │   │   │   ├── HomeViewModel.kt        # Datos para Inicio.
         │   │   │   ├── DetalleViewModel.kt     # Guardar o quitar de Mi lista.
         │   │   │   ├── MiListaViewModel.kt     # Datos y eliminación de la lista.
@@ -52,6 +51,8 @@ Android-desing-CineMora/
         │   │   │   ├── TrailerPlayerViewModel.kt # Id/carga del tráiler.
         │   │   │   └── VideoPlayerViewModel.kt # Error del reproductor.
         │   │   └── ui/
+        │   │       ├── navigation/
+        │   │       │   └── CineMoraDestination.kt # Rutas Navigation Compose tipadas.
         │   │       ├── components/CineComponents.kt # Encabezado, póster y colores.
         │   │       ├── screen/
         │   │       │   ├── CineMoraApp.kt      # Navegación por estado y Scaffold.
@@ -78,7 +79,7 @@ Android-desing-CineMora/
             └── ExampleInstrumentedTest.kt      # Prueba del nombre de paquete.
 ```
 
-`app/build.gradle.kts` lee `TMDB_ACCESS_TOKEN` desde `local.properties` y lo coloca en `BuildConfig.TMDB_ACCESS_TOKEN`. `gradle/libs.versions.toml` declara Compose, Lifecycle, Coil, Media3 y Android YouTube Player, entre otras dependencias.
+`app/build.gradle.kts` lee `TMDB_ACCESS_TOKEN` desde `local.properties` y lo coloca en `BuildConfig.TMDB_ACCESS_TOKEN`. También activa el plugin de Kotlin Serialization e incorpora Navigation Compose. `gradle/libs.versions.toml` declara Compose, Lifecycle, Navigation Compose, Kotlin Serialization, Coil, Media3 y Android YouTube Player, entre otras dependencias.
 
 ## 3. Diagrama del flujo de datos y conexión de archivos
 
@@ -89,22 +90,23 @@ flowchart TD
     A["AndroidManifest.xml"] -->|"declara launcher"| B["MainActivity.kt"]
     B -->|"aplica"| C["CinemoraTheme"]
     B -->|"compone"| D["CineMoraApp"]
-    D <-->|"observa y actualiza destino/seleccionado"| E["CineMoraAppViewModel"]
-    D -->|"muestra en INICIO"| F["HomeScreen"]
-    D -->|"muestra en LISTA"| G["MiListaScreen"]
-    D -->|"muestra en AGREGAR"| H["AgregarContenidoScreen"]
-    D -->|"muestra en DETALLE"| I["DetalleScreen"]
-    D -->|"muestra en REPRODUCTOR"| J["VideoPlayerScreen"]
-    D -->|"muestra en TRAILER"| K["TrailerPlayerScreen"]
-    D -->|"muestra en PERFIL"| L["ProfileScreen"]
-    F -->|"abre detalle"| E
-    G -->|"abre detalle"| E
-    I -->|"navega a reproductor o tráiler"| E
-    J -->|"vuelve a detalle"| E
-    K -->|"vuelve a detalle"| E
+    D -->|"crea"| E["NavHost y NavController"]
+    E -->|"usa rutas @Serializable"| R["CineMoraDestination.kt"]
+    E -->|"muestra Inicio"| F["HomeScreen"]
+    E -->|"muestra Lista"| G["MiListaScreen"]
+    E -->|"muestra AgregarContenido"| H["AgregarContenidoScreen"]
+    E -->|"muestra Detalle(id, tipo)"| I["DetalleScreen"]
+    E -->|"muestra Reproductor(id, tipo)"| J["VideoPlayerScreen"]
+    E -->|"muestra Trailer(id, tipo)"| K["TrailerPlayerScreen"]
+    E -->|"muestra Perfil"| L["ProfileScreen"]
+    F -->|"navega a Detalle"| E
+    G -->|"navega a Detalle"| E
+    I -->|"navega a Reproductor o Trailer"| E
+    J -->|"navigateUp"| E
+    K -->|"navigateUp"| E
 ```
 
-No se usa Navigation Compose. `CineMoraApp.kt` selecciona la pantalla con un `when (destino)` y conserva el elemento elegido dentro de `CineMoraAppViewModel`.
+`CineMoraApp.kt` usa Navigation Compose. Cada ruta de `CineMoraDestination.kt` tiene `@Serializable`: las rutas sin parámetros son `data object` y las que representan contenido son `data class` con `contenidoId` y `contenidoTipo`.
 
 ### Catálogo, Mi lista y TMDB
 
@@ -202,16 +204,11 @@ El bloque `init` ejecuta `actualizarDesdeTmdb()` mediante `CoroutineScope(Superv
 
 No hay DAO, entidad Room, DataStore, SharedPreferences ni archivo de datos en esta capa.
 
-### ViewModels
+### Navegación y ViewModels
 
-- `CineMoraAppViewModel.kt`: define `Destino` (`INICIO`, `LISTA`, `AGREGAR`, `DETALLE`, `REPRODUCTOR`, `TRAILER`, `PERFIL`), el destino actual y el `Contenido` seleccionado. Su método central conecta una tarjeta con Detalle:
+`ui/navigation/CineMoraDestination.kt` declara `Inicio`, `Lista`, `AgregarContenido`, `Perfil`, `Detalle`, `Reproductor` y `Trailer`. Navigation Compose serializa internamente las rutas tipadas. `Detalle`, `Reproductor` y `Trailer` reciben solo `contenidoId` y `contenidoTipo`; no transportan el objeto `Contenido` completo.
 
-  ```kotlin
-  fun abrirDetalle(contenido: Contenido) {
-      _seleccionado.value = contenido
-      _destino.value = Destino.DETALLE
-  }
-  ```
+Al entrar en una de esas rutas, `CineMoraApp.kt` usa `CineRepository.obtenerContenido(id, tipo)` para recuperar la versión actual. El repositorio busca primero en `catalogo` y después en `miLista`. Si no existe, `DetalleScreen`, `VideoPlayerScreen` y `TrailerPlayerScreen` muestran **Contenido no encontrado** y permiten volver con `navigateUp()`.
 
 - `HomeViewModel.kt`: expone `CineRepository.catalogo` y `miLista`. Tiene `actualizarCatalogo()`, pero `HomeScreen` no lo invoca actualmente.
 - `DetalleViewModel.kt`: expone `miLista` y, en `alternarGuardado`, llama a `agregarAMiLista` o `quitarDeMiLista`.
@@ -222,7 +219,7 @@ No hay DAO, entidad Room, DataStore, SharedPreferences ni archivo de datos en es
 
 ### Pantallas
 
-- `CineMoraApp.kt` es el contenedor: obtiene ViewModels con `viewModel()`, observa destino/selección con `collectAsStateWithLifecycle()` y presenta el composable de cada destino. Su barra inferior navega a Inicio, Mi lista y Agregar. Se oculta solo en `DETALLE` y `PERFIL`; por la condición actual sigue existiendo en Reproductor y Tráiler.
+- `CineMoraApp.kt` es el contenedor y grafo de navegación: crea `NavHostController`, presenta `NavHost(startDestination = Inicio)` y obtiene los argumentos con `backStackEntry.toRoute<T>()`. La barra inferior solo se muestra en Inicio, Mi lista y Agregar; usa `popUpTo`, `saveState`, `restoreState` y `launchSingleTop` al cambiar entre esos destinos.
 - `HomeScreen.kt` observa catálogo y lista, usa `LazyVerticalGrid`, abre detalle al tocar la tarjeta y muestra **En lista** para elementos guardados. **Ver perfil** dispara su callback.
 - `DetalleScreen.kt` muestra el modelo elegido, observa si está guardado, alterna la lista y presenta acciones de reproducir, tráiler y búsqueda externa de JustWatch. Los datos visuales Dirección `CineMora`, Audio `Original` y Clasif. `+13 años` son textos fijos; no vienen de TMDB ni de `Contenido`.
 - `MiListaScreen.kt` presenta estado vacío o un `LazyColumn`, abre detalle y elimina. Los chips de filtro y el icono de filtrar no tienen lógica en sus `onClick`; `RecommendationCard()` también es solo visual.
@@ -253,13 +250,13 @@ setContent {
 
 ## 5. Flujo de navegación y estado
 
-1. `CineMoraApp` observa `destino`; `when (destino)` decide la pantalla.
-2. La barra inferior llama `navegar(Destino.INICIO)`, `LISTA` o `AGREGAR`.
-3. Una tarjeta de Inicio o Mi lista llama `abrirDetalle(contenido)`, que guarda el objeto completo en `seleccionado` y establece `DETALLE`.
-4. Desde Detalle, **Reproducir película** va a `REPRODUCTOR` si hay `videoUrl`; **Ver tráiler** va a `TRAILER` si hay `trailerYoutubeId` o `tmdbId`.
-5. Reproductor y Tráiler vuelven a Detalle; Detalle y Perfil vuelven a Inicio.
+1. `CineMoraApp` crea un `NavHost` con `Inicio` como destino inicial.
+2. La barra inferior navega con rutas tipadas `Inicio`, `Lista` o `AgregarContenido`. Su configuración elimina destinos superiores hasta Inicio, evita duplicados y restaura su estado guardado.
+3. Una tarjeta de Inicio o Mi lista navega a `Detalle(contenido.id, contenido.tipo)`.
+4. El destino recupera el objeto con `CineRepository.obtenerContenido`. Desde Detalle, **Reproducir película** navega a `Reproductor(id, tipo)` y **Ver tráiler** a `Trailer(id, tipo)`.
+5. `NavController.navigateUp()` devuelve desde Perfil al origen, desde Detalle a Inicio o Mi lista según el recorrido y desde reproductor/tráiler a Detalle. El botón físico Atrás de los reproductores usa el mismo comportamiento.
 
-No existen `NavHost`, `NavController`, rutas, argumentos serializados ni pila de retroceso. Las pantallas de reproducción sí interceptan el botón físico Atrás con `BackHandler`; las otras no incluyen un manejador propio.
+Las rutas solo conservan argumentos simples. Si el contenido no está en catálogo ni en Mi lista, las tres pantallas dependientes de contenido muestran **Contenido no encontrado** en vez de intentar usar datos nulos.
 
 Las pantallas convierten los flujos a estado Compose:
 
@@ -276,10 +273,10 @@ Cuando el repositorio cambia una lista, todos los composables que observan ese f
 
 1. Android lee `AndroidManifest.xml` y abre `MainActivity`.
 2. `MainActivity.onCreate()` ejecuta `CinemoraTheme { CineMoraApp() }`.
-3. `CineMoraAppViewModel` comienza en `Destino.INICIO`, por lo que aparece `HomeScreen`.
+3. `NavHost` inicia con la ruta tipada `Inicio`, por lo que aparece `HomeScreen`.
 4. `HomeViewModel` referencia `CineRepository.catalogo`. El repositorio ya tiene datos locales e inicia su actualización TMDB en segundo plano; no hay indicador de carga o error para esa actualización.
-5. La persona toca una tarjeta de `HomeScreen`. `onAbrir(item)` llama `CineMoraAppViewModel.abrirDetalle(item)`.
-6. El ViewModel cambia `seleccionado` y `destino`; la recomposición muestra `DetalleScreen(item = seleccionado, ...)`.
+5. La persona toca una tarjeta de `HomeScreen`. `onAbrir(item)` navega a `Detalle(item.id, item.tipo)`.
+6. El `NavHost` obtiene esos argumentos con `toRoute<Detalle>()`, recupera el modelo actual mediante `CineRepository.obtenerContenido` y muestra `DetalleScreen`.
 7. Detalle calcula `guardado = item in lista`. Al tocar **Agregar a Mi lista** llama `DetalleViewModel.alternarGuardado(item, false)`.
 8. Ese ViewModel invoca `CineRepository.agregarAMiLista(item)`, que añade el objeto si no existe la combinación de `id` y `tipo`.
 9. `_miLista` emite el nuevo valor: Detalle muestra **Quitar de Mi lista**, Inicio puede mostrar la marca **En lista** y Mi lista presenta la tarjeta cuando se navega a ella.
@@ -301,13 +298,13 @@ Para agregar al catálogo, la barra abre `AgregarContenidoScreen`; el campo llam
 
 ### Estado no persistente
 
-`CineRepository` mantiene `catalogo` y `miLista` en `MutableStateFlow`. La selección/destino y el formulario también son estado en ViewModels. No hay Room, DataStore, SharedPreferences, archivo de datos ni base de datos remota propia; el código no garantiza conservar lista o contenido agregado al cerrar el proceso.
+`CineRepository` mantiene `catalogo` y `miLista` en `MutableStateFlow`. El formulario vive en su ViewModel y la pila de navegación vive en memoria en `NavController`. No hay Room, DataStore, SharedPreferences, archivo de datos ni base de datos remota propia; el código no garantiza conservar lista o contenido agregado al cerrar el proceso.
 
 ### Diferencias importantes entre README y código
 
 | README / diseño descrito | Evidencia actual |
 | --- | --- |
-| Retrofit + Kotlin Serialization | No se declaran ni usan. TMDB emplea `HttpURLConnection` y `org.json`. |
+| Retrofit + Kotlin Serialization para acceso remoto | No hay Retrofit. Kotlin Serialization se usa ahora para rutas tipadas, mientras TMDB sigue empleando `HttpURLConnection` y `org.json`. |
 | Room para Mi lista | No hay dependencia, entidad, DAO ni base de datos. La lista es un `MutableStateFlow`. |
 | DataStore para preferencias | No hay dependencia ni uso de DataStore. Perfil no guarda preferencias. |
 | Modelo relacional Usuario, Lista personal, Género y Elemento lista | No existen clases ni tablas para esas entidades; el modelo implementado es `Contenido`. |
@@ -320,10 +317,10 @@ Para agregar al catálogo, la barra abre `AgregarContenidoScreen`; el campo llam
 - Reproducir depende de una URL externa disponible; solamente cuatro contenidos iniciales tienen `videoUrl`.
 - Filtros, recomendación, chips de categorías y avatar son elementos visuales sin acción funcional actual.
 - **Dónde ver** abre una búsqueda externa de JustWatch; no obtiene resultados dentro de CineMora.
-- La navegación no guarda historial y el perfil no representa autenticación ni usuario real.
+- La navegación conserva historial solo mientras el proceso esté activo; no hay persistencia de la pila ni del perfil, que tampoco representa autenticación o usuario real.
 
 ## 8. Conclusión
 
-El avance se organiza en un flujo claro: `MainActivity` inicia Compose; `CineMoraApp` selecciona pantallas con `Destino`; los ViewModels median las acciones; `CineRepository` comparte catálogo y lista mediante `StateFlow`; y `Contenido` conecta datos, UI y TMDB. Esta base permite estudiar cómo una modificación central se refleja de forma reactiva en varias pantallas.
+El avance se organiza en un flujo claro: `MainActivity` inicia Compose; `CineMoraApp` declara el `NavHost` con rutas tipadas; los ViewModels median las acciones de cada pantalla; `CineRepository` comparte catálogo y lista mediante `StateFlow`; y `Contenido` conecta datos, UI y TMDB. Esta base permite estudiar cómo una modificación central se refleja de forma reactiva en varias pantallas.
 
 El README plantea una arquitectura futura más amplia. Para llegar a ella todavía haría falta implementar persistencia, preferencias, las entidades relacionales y la capa HTTP indicada allí. La presente documentación diferencia esas propuestas de las funciones identificadas en el código actual.

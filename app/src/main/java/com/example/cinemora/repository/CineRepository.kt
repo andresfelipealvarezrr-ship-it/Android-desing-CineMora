@@ -71,6 +71,14 @@ object CineRepository {
         _miLista.value = _miLista.value.filterNot { it.id == contenido.id && it.tipo == contenido.tipo }
     }
 
+    /**
+     * Recupera el contenido más reciente a partir de los argumentos mínimos de navegación.
+     * La lista personal es un respaldo para no perder un elemento que aún esté guardado.
+     */
+    fun obtenerContenido(id: Int, tipo: String): Contenido? =
+        _catalogo.value.firstOrNull { it.id == id && it.tipo == tipo }
+            ?: _miLista.value.firstOrNull { it.id == id && it.tipo == tipo }
+
     fun agregarContenido(titulo: String) {
         val tituloLimpio = titulo.trim()
         if (tituloLimpio.isBlank()) return

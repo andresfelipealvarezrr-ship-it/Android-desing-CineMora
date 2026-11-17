@@ -2,6 +2,10 @@
 
 Proyecto de diseño de una aplicación Android para consultar contenido cinematográfico, organizar listas personales y guardar preferencias.
 
+## Navegación actual
+
+La aplicación usa Navigation Compose con rutas tipadas y `@Serializable`. Los destinos implementados son Inicio, Mi lista, Agregar contenido, Detalle, Perfil, Reproductor y Tráiler. Las rutas de contenido solo llevan su `id` y `tipo`; `CineRepository` recupera el objeto actual y las pantallas muestran un estado de contenido no encontrado si no puede recuperarse.
+
 ## Prototipo UI/UX
 
 Ver prototipo en [Google Stitch](https://stitch.withgoogle.com/projects/10239007104782718379)
@@ -66,18 +70,15 @@ erDiagram
 ```mermaid
 flowchart TD
     A[Usuario] --> B[UI: Jetpack Compose]
-    B --> C[ViewModel]
-    C --> D[Estados UI: Loading / Success / Error]
-    C --> E[Repository]
-
-    E --> F[Remote Data Source]
-    E --> G[Local Data Source]
-
-    F --> H[Retrofit + Kotlin Serialization]
-    H --> I[API de TMDB]
-
-    G --> J[Room: Mi lista]
-    G --> K[DataStore: Preferencias]
+    B --> C[Navigation Compose]
+    C --> D[Rutas tipadas @Serializable]
+    D --> E[Pantallas]
+    E --> F[ViewModel]
+    F --> G[CineRepository]
+    G --> H[StateFlow: catálogo y Mi lista]
+    G --> I[TmdbApiService]
+    I --> J[HttpURLConnection y JSON]
+    J --> K[API de TMDB]
 ```
 
 ## Pantallas planificadas
