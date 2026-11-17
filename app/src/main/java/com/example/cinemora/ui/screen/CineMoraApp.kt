@@ -1,7 +1,5 @@
-
 package com.example.cinemora.ui.screen
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -18,143 +16,150 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.example.cinemora.repository.CineRepository
 import com.example.cinemora.ui.components.Fondo
 import com.example.cinemora.ui.components.Morado
 import com.example.cinemora.ui.components.TextoSecundario
-
-import com.example.cinemora.viewmodel.AgregarContenidoViewModel
-import com.example.cinemora.viewmodel.CineMoraAppViewModel
-import com.example.cinemora.viewmodel.Destino
-import com.example.cinemora.viewmodel.DetalleViewModel
-import com.example.cinemora.viewmodel.HomeViewModel
-import com.example.cinemora.viewmodel.MiListaViewModel
+import com.example.cinemora.ui.navigation.AgregarContenido
+import com.example.cinemora.ui.navigation.Detalle
+import com.example.cinemora.ui.navigation.Inicio
+import com.example.cinemora.ui.navigation.Lista
+import com.example.cinemora.ui.navigation.Perfil
+import com.example.cinemora.ui.navigation.Reproductor
+import com.example.cinemora.ui.navigation.Trailer
 
 @Composable
-fun CineMoraApp(
-    appViewModel: CineMoraAppViewModel = viewModel(),
-    homeViewModel: HomeViewModel = viewModel(),
-    listaViewModel: MiListaViewModel = viewModel(),
-    detalleViewModel: DetalleViewModel = viewModel(),
-    agregarViewModel: AgregarContenidoViewModel = viewModel()
-) {
-
-    val destino by appViewModel.destino.collectAsStateWithLifecycle()
-
-    val seleccionado by appViewModel.seleccionado.collectAsStateWithLifecycle()
+fun CineMoraApp() {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val destinoActual = navBackStackEntry?.destination
 
     Scaffold(
         containerColor = Fondo,
-
         bottomBar = {
-
-            // Ocultar barra inferior en Detalle y Perfil
-            if (
-                destino != Destino.DETALLE &&
-                destino != Destino.PERFIL
-            ) {
-
-                NavigationBar(
-                    containerColor = Fondo
-                ) {
-
+            if (destinoActual.esDestinoPrincipal()) {
+                NavigationBar(containerColor = Fondo) {
                     NavItem(
-                        destino == Destino.INICIO,
-                        "Inicio",
-                        { Icon(Icons.Default.Home, null) }
-                    ) {
-                        appViewModel.navegar(Destino.INICIO)
-                    }
-
+                        selected = destinoActual.tieneRuta<Inicio>(),
+                        label = "Inicio",
+                        icon = { Icon(Icons.Default.Home, null) },
+                        onClick = { navController.navegarADestinoPrincipal(Inicio) }
+                    )
                     NavItem(
-                        destino == Destino.LISTA,
-                        "Mi lista",
-                        { Icon(Icons.Default.Bookmark, null) }
-                    ) {
-                        appViewModel.navegar(Destino.LISTA)
-                    }
-
+                        selected = destinoActual.tieneRuta<Lista>(),
+                        label = "Mi lista",
+                        icon = { Icon(Icons.Default.Bookmark, null) },
+                        onClick = { navController.navegarADestinoPrincipal(Lista) }
+                    )
                     NavItem(
-                        destino == Destino.AGREGAR,
-                        "Agregar",
-                        { Icon(Icons.Default.Add, null) }
-                    ) {
-                        appViewModel.navegar(Destino.AGREGAR)
-                    }
+                        selected = destinoActual.tieneRuta<AgregarContenido>(),
+                        label = "Agregar",
+                        icon = { Icon(Icons.Default.Add, null) },
+                        onClick = { navController.navegarADestinoPrincipal(AgregarContenido) }
+                    )
                 }
             }
         }
-
     ) { padding ->
-
-        Box(
-            Modifier.padding(padding)
+        NavHost(
+            navController = navController,
+            startDestination = Inicio,
+            modifier = Modifier.padding(padding)
         ) {
-
-            when (destino) {
-
-                Destino.INICIO -> HomeScreen(
-                    viewModel = homeViewModel,
-                    onAbrir = appViewModel::abrirDetalle,
-
-                    // NUEVA NAVEGACIÓN A PERFIL
-                    onNavigateToProfile = {
-                        appViewModel.navegar(Destino.PERFIL)
-                    }
+            composable<Inicio> {
+                HomeScreen(
+                    viewModel = viewModel(),
+                    onAbrir = { contenido ->
+                        navController.navigate(Detalle(contenido.id, contenido.tipo))
+                    },
+                    onNavigateToProfile = { navController.navigate(Perfil) }
                 )
+            }
 
-                Destino.LISTA -> MiListaScreen(
-                    listaViewModel,
-                    appViewModel::abrirDetalle
-                ) {
-                    appViewModel.navegar(Destino.INICIO)
-                }
-
-                Destino.AGREGAR -> AgregarContenidoScreen(
-                    agregarViewModel
+            composable<Lista> {
+                MiListaScreen(
+                    viewModel = viewModel(),
+                    onAbrir = { contenido ->
+                        navController.navigate(Detalle(contenido.id, contenido.tipo))
+                    },
+                    onExplorar = { navController.navegarADestinoPrincipal(Inicio) }
                 )
+            }
 
-                Destino.DETALLE -> DetalleScreen(
-                    item = seleccionado,
-                    viewModel = detalleViewModel,
+            composable<AgregarContenido> {
+                AgregarContenidoScreen(viewModel = viewModel())
+            }
+
+            composable<Detalle> { backStackEntry ->
+                val ruta = backStackEntry.toRoute<Detalle>()
+                val contenido = CineRepository.obtenerContenido(
+                    id = ruta.contenidoId,
+                    tipo = ruta.contenidoTipo
+                )
+                DetalleScreen(
+                    item = contenido,
+                    viewModel = viewModel(),
                     onPlay = {
-                        appViewModel.navegar(Destino.REPRODUCTOR)
+                        navController.navigate(Reproductor(ruta.contenidoId, ruta.contenidoTipo))
                     },
                     onTrailer = {
-                        appViewModel.navegar(Destino.TRAILER)
+                        navController.navigate(Trailer(ruta.contenidoId, ruta.contenidoTipo))
                     },
-                    onBack = {
-                        appViewModel.navegar(Destino.INICIO)
-                    }
+                    onBack = { navController.navigateUp() }
                 )
+            }
 
-                Destino.REPRODUCTOR -> VideoPlayerScreen(
-                    contenido = seleccionado,
-                    onBack = {
-                        appViewModel.navegar(Destino.DETALLE)
-                    }
+            composable<Reproductor> { backStackEntry ->
+                val ruta = backStackEntry.toRoute<Reproductor>()
+                VideoPlayerScreen(
+                    contenido = CineRepository.obtenerContenido(ruta.contenidoId, ruta.contenidoTipo),
+                    onBack = { navController.navigateUp() }
                 )
+            }
 
-                Destino.TRAILER -> TrailerPlayerScreen(
-                    contenido = seleccionado,
-                    onBack = {
-                        appViewModel.navegar(Destino.DETALLE)
-                    }
+            composable<Trailer> { backStackEntry ->
+                val ruta = backStackEntry.toRoute<Trailer>()
+                TrailerPlayerScreen(
+                    contenido = CineRepository.obtenerContenido(ruta.contenidoId, ruta.contenidoTipo),
+                    onBack = { navController.navigateUp() }
                 )
+            }
 
-                // NUEVA PANTALLA DE PERFIL
-                Destino.PERFIL -> ProfileScreen(
+            composable<Perfil> {
+                ProfileScreen(
                     username = "usuario_demo",
-                    onBack = {
-                        appViewModel.navegar(Destino.INICIO)
-                    }
+                    onBack = { navController.navigateUp() }
                 )
             }
         }
     }
 }
+
+private inline fun <reified T : Any> NavHostController.navegarADestinoPrincipal(destino: T) {
+    navigate(destino) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+private fun NavDestination?.esDestinoPrincipal(): Boolean =
+    this.tieneRuta<Inicio>() || this.tieneRuta<Lista>() || this.tieneRuta<AgregarContenido>()
+
+private inline fun <reified T : Any> NavDestination?.tieneRuta(): Boolean =
+    this?.hasRoute<T>() == true
 
 @Composable
 private fun RowScope.NavItem(
@@ -163,14 +168,11 @@ private fun RowScope.NavItem(
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
-
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
         icon = icon,
-        label = {
-            Text(label)
-        },
+        label = { Text(label) },
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = Color.White,
             selectedTextColor = Color.White,
