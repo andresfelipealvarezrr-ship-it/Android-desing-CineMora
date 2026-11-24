@@ -1,326 +1,113 @@
-# Arquitectura y flujo de ejecución — CineMora (avance 1)
-
-> Elaborado a partir de la estructura y el código actuales. Describe lo verificable en los archivos; no garantiza que servicios externos como TMDB, YouTube o Archive.org respondan durante la ejecución.
-
-## 1. Introducción
-
-CineMora es una aplicación Android para explorar contenido cinematográfico y organizar una lista personal. El usuario puede ver un catálogo, abrir el detalle de un título, añadirlo o retirarlo de **Mi lista**, agregar un título local, abrir tráileres y reproducir algunos contenidos con URL de video. También existe una pantalla de perfil de demostración.
-
-El proyecto contiene un único módulo Android (`app`) y está escrito en Kotlin. Usa Jetpack Compose y Material 3 para la UI; Navigation Compose y Kotlin Serialization para las rutas tipadas; `ViewModel`, corrutinas y `StateFlow` para estado; Coil para pósteres de URL; Media3 ExoPlayer para video; Android YouTube Player para tráileres; y `HttpURLConnection` con `org.json` para consultar TMDB. El permiso `INTERNET` se declara en `app/src/main/AndroidManifest.xml`.
-
-El catálogo inicia con contenido local en `CineRepository`. Al crearse ese repositorio intenta enriquecer dichos títulos y añadir tendencias de TMDB. La lista del usuario y el catálogo modificado viven solamente en memoria.
-
-## 2. Estructura del proyecto
-
-El árbol omite directorios generados y de IDE (`.gradle/`, `build/` y `.idea/`). Todas las rutas listadas existen en el proyecto.
-
-```text
-Android-desing-CineMora/
-├── README.md                                  # Alcance, diagramas y funciones planeadas.
-├── settings.gradle.kts                        # Proyecto raíz y módulo :app.
-├── build.gradle.kts                           # Plugins de nivel raíz.
-├── gradle.properties                          # Propiedades de Gradle.
-├── gradlew / gradlew.bat                      # Gradle Wrapper.
-├── gradle/
-│   ├── libs.versions.toml                     # Versiones y dependencias.
-│   ├── gradle-daemon-jvm.properties           # Configuración JVM del daemon.
-│   └── wrapper/
-│       ├── gradle-wrapper.jar                 # Binario del wrapper.
-│       └── gradle-wrapper.properties          # Configuración del wrapper.
-├── docs/
-│   └── arquitectura_y_flujo.md                # Este documento.
-└── app/
-    ├── build.gradle.kts                       # SDK, BuildConfig y dependencias.
-    └── src/
-        ├── main/
-        │   ├── AndroidManifest.xml            # Permiso y actividad lanzadora.
-        │   ├── keepRules/rules.keep            # Reglas de conservación de empaquetado.
-        │   ├── java/com/example/cinemora/
-        │   │   ├── MainActivity.kt            # Entrada Android y raíz Compose.
-        │   │   ├── model/Contenido.kt         # Modelo de película o serie.
-        │   │   ├── data/remote/
-        │   │   │   ├── TmdbClient.kt          # Punto de acceso remoto.
-        │   │   │   ├── TmdbApiService.kt      # HTTP, JSON y mapeo de TMDB.
-        │   │   │   └── dto/TmdbContenidoDto.kt # DTO temporal de TMDB.
-        │   │   ├── repository/CineRepository.kt # Estado compartido del catálogo/lista.
-        │   │   ├── viewmodel/
-        │   │   │   ├── HomeViewModel.kt        # Datos para Inicio.
-        │   │   │   ├── DetalleViewModel.kt     # Guardar o quitar de Mi lista.
-        │   │   │   ├── MiListaViewModel.kt     # Datos y eliminación de la lista.
-        │   │   │   ├── AgregarContenidoViewModel.kt # Formulario y validación.
-        │   │   │   ├── TrailerPlayerViewModel.kt # Id/carga del tráiler.
-        │   │   │   └── VideoPlayerViewModel.kt # Error del reproductor.
-        │   │   └── ui/
-        │   │       ├── navigation/
-        │   │       │   └── CineMoraDestination.kt # Rutas Navigation Compose tipadas.
-        │   │       ├── components/CineComponents.kt # Encabezado, póster y colores.
-        │   │       ├── screen/
-        │   │       │   ├── CineMoraApp.kt      # Navegación por estado y Scaffold.
-        │   │       │   ├── HomeScreen.kt       # Catálogo.
-        │   │       │   ├── DetalleScreen.kt    # Detalle y acciones.
-        │   │       │   ├── MiListaScreen.kt    # Lista personal.
-        │   │       │   ├── AgregarContenidoScreen.kt # Formulario de título.
-        │   │       │   ├── TrailerPlayerScreen.kt # Reproductor YouTube.
-        │   │       │   ├── VideoPlayerScreen.kt # Reproductor Media3.
-        │   │       │   └── ProfileScreen.kt    # Perfil fijo de demostración.
-        │   │       └── theme/
-        │   │           ├── Color.kt            # Paleta Material.
-        │   │           ├── Theme.kt            # CinemoraTheme.
-        │   │           └── Type.kt             # Tipografía.
-        │   └── res/
-        │       ├── drawable/                   # Capas XML de icono.
-        │       ├── drawable-nodpi/             # Seis PNG de pósteres locales.
-        │       ├── mipmap-*/                   # Iconos launcher por densidad.
-        │       ├── values/                     # strings, tema XML y colors.xml.
-        │       └── xml/                        # Plantillas de backup/extracción.
-        ├── test/java/com/example/cinemora/
-        │   └── ExampleUnitTest.kt              # Prueba de plantilla 2 + 2 = 4.
-        └── androidTest/java/com/example/cinemora/
-            └── ExampleInstrumentedTest.kt      # Prueba del nombre de paquete.
-```
-
-`app/build.gradle.kts` lee `TMDB_ACCESS_TOKEN` desde `local.properties` y lo coloca en `BuildConfig.TMDB_ACCESS_TOKEN`. También activa el plugin de Kotlin Serialization e incorpora Navigation Compose. `gradle/libs.versions.toml` declara Compose, Lifecycle, Navigation Compose, Kotlin Serialization, Coil, Media3 y Android YouTube Player, entre otras dependencias.
-
-## 3. Diagrama del flujo de datos y conexión de archivos
-
-### Inicio y navegación
-
-```mermaid
-flowchart TD
-    A["AndroidManifest.xml"] -->|"declara launcher"| B["MainActivity.kt"]
-    B -->|"aplica"| C["CinemoraTheme"]
-    B -->|"compone"| D["CineMoraApp"]
-    D -->|"crea"| E["NavHost y NavController"]
-    E -->|"usa rutas @Serializable"| R["CineMoraDestination.kt"]
-    E -->|"muestra Inicio"| F["HomeScreen"]
-    E -->|"muestra Lista"| G["MiListaScreen"]
-    E -->|"muestra AgregarContenido"| H["AgregarContenidoScreen"]
-    E -->|"muestra Detalle(id, tipo)"| I["DetalleScreen"]
-    E -->|"muestra Reproductor(id, tipo)"| J["VideoPlayerScreen"]
-    E -->|"muestra Trailer(id, tipo)"| K["TrailerPlayerScreen"]
-    E -->|"muestra Perfil"| L["ProfileScreen"]
-    F -->|"navega a Detalle"| E
-    G -->|"navega a Detalle"| E
-    I -->|"navega a Reproductor o Trailer"| E
-    J -->|"navigateUp"| E
-    K -->|"navigateUp"| E
-```
-
-`CineMoraApp.kt` usa Navigation Compose. Cada ruta de `CineMoraDestination.kt` tiene `@Serializable`: las rutas sin parámetros son `data object` y las que representan contenido son `data class` con `contenidoId` y `contenidoTipo`.
-
-### Catálogo, Mi lista y TMDB
-
-```mermaid
-flowchart LR
-    A["HomeScreen"] -->|"observa"| B["HomeViewModel"]
-    C["DetalleScreen"] -->|"alterna guardado"| D["DetalleViewModel"]
-    E["MiListaScreen"] -->|"observa y quita"| F["MiListaViewModel"]
-    G["AgregarContenidoScreen"] -->|"valida y guarda"| H["AgregarContenidoViewModel"]
-    B -->|"expone StateFlow"| I["CineRepository"]
-    D -->|"agrega o quita"| I
-    F -->|"quita"| I
-    H -->|"agrega contenido"| I
-    I -->|"mantiene"| J["Contenido"]
-    I -->|"solicita datos"| K["TmdbClient"]
-    K -->|"expone api"| L["TmdbApiService"]
-    L -->|"convierte JSON"| M["TmdbContenidoDto"]
-    M -->|"mapea a"| J
-    L -->|"HTTP Bearer"| N["API TMDB"]
-    I -->|"actualiza catálogo/lista"| B
-    I -->|"actualiza lista"| D
-    I -->|"actualiza lista"| F
-```
-
-`CineRepository` es un `object`, así que las pantallas comparten los mismos flujos. TMDB puede complementar el catálogo; **Mi lista** no se envía a TMDB ni se persiste.
-
-### Pósteres y reproducción
-
-```mermaid
-flowchart TD
-    A["DetalleScreen"] -->|"abre tráiler"| B["TrailerPlayerScreen"]
-    B -->|"carga id"| C["TrailerPlayerViewModel"]
-    C -->|"solicita tráiler si falta id"| D["TmdbClient / TmdbApiService"]
-    B -->|"integra"| E["YouTubePlayerView"]
-    A -->|"abre si existe videoUrl"| F["VideoPlayerScreen"]
-    F -->|"muestra error"| G["VideoPlayerViewModel"]
-    F -->|"integra"| H["Media3 ExoPlayer"]
-    H -->|"reproduce"| I["videoUrl de Contenido"]
-    J["HomeScreen, DetalleScreen y MiListaScreen"] -->|"reutilizan"| K["Poster"]
-    K -->|"carga URL"| L["Coil AsyncImage"]
-    K -->|"o carga recurso"| M["drawable-nodpi"]
-```
-
-## 4. Análisis de archivos e interconexión
-
-### Modelos y DTO
-
-`model/Contenido.kt` define el modelo que utilizan repositorio, ViewModels y UI. Agrupa los datos de presentación y los opcionales de integración:
-
-```kotlin
-data class Contenido(
-    val id: Int,
-    val titulo: String,
-    // ...
-    val videoUrl: String? = null,
-    val trailerYoutubeId: String? = null,
-    val posterUrl: String? = null,
-    val tmdbId: Int? = null
-)
-```
-
-`ui/components/CineComponents.kt` lee `posterUrl` antes de `posterRes`; `DetalleScreen` solo ofrece reproducir si `videoUrl` no es nulo. `TmdbContenidoDto.kt` es un modelo temporal para datos remotos: sus géneros son IDs y `posterPath` aún no es una URL. Una extensión privada en `TmdbApiService.kt` lo transforma a `Contenido`; el DTO no llega directamente a una pantalla.
-
-### Conexión remota y API de TMDB
-
-`TmdbClient.kt` es una fachada mínima que expone `TmdbApiService`. El servicio es un `object` que trabaja en `Dispatchers.IO`, usa `HttpURLConnection` y `JSONObject`, agrega el token Bearer y contiene estas funciones:
-
-- `obtenerTendencias()`: solicita `/trending/all/day?language=es-CO`, acepta solo `movie` y `tv` y los mapea al modelo de dominio.
-- `enriquecerContenido(contenido)`: busca por título para completar `posterUrl`, `tmdbId` y, si hace falta, tráiler.
-- `obtenerTrailer(tmdbId, tipo)`: obtiene videos para película o serie.
-- `obtenerTrailerInterno(...)`: busca primero videos `es-CO`, luego `en-US`, y prefiere tráiler oficial de YouTube.
-- `nombreGenero(...)`: traduce solo los IDs de su mapa local.
-
-Si el token está vacío, las tendencias devuelven una lista vacía:
-
-```kotlin
-val token = BuildConfig.TMDB_ACCESS_TOKEN.trim()
-if (token.isBlank()) return@withContext emptyList()
-```
-
-Las excepciones y respuestas no exitosas se absorben con `runCatching`; por ello esta capa conserva el objeto original o devuelve una colección vacía, sin publicar un error de catálogo a la UI.
-
-### Repositorio
-
-`repository/CineRepository.kt` es la fuente única de datos de esta versión. Mantiene `_catalogo` y `_miLista` como `MutableStateFlow`, y expone valores de solo lectura:
-
-```kotlin
-val catalogo: StateFlow<List<Contenido>> = _catalogo.asStateFlow()
-val miLista: StateFlow<List<Contenido>> = _miLista.asStateFlow()
-```
-
-El catálogo inicial tiene ocho elementos locales. Cuatro tienen URL de Archive.org y tipo `"película completa"`; otros usan los recursos `poster_space`, `poster_fantasy`, `poster_noir`, `poster_desert`, `poster_library` o `poster_arctic`. La lista inicia vacía.
-
-El bloque `init` ejecuta `actualizarDesdeTmdb()` mediante `CoroutineScope(SupervisorJob() + Dispatchers.IO)`. Primero enriquece cada título local y luego añade tendencias cuyo título no exista, comparando en minúsculas. `agregarAMiLista` evita duplicados con `id` y `tipo`; `quitarDeMiLista` filtra por los mismos campos. `agregarContenido(titulo)` calcula el id siguiente y añade un elemento con metadatos predeterminados y `R.drawable.poster_desert`.
-
-No hay DAO, entidad Room, DataStore, SharedPreferences ni archivo de datos en esta capa.
-
-### Navegación y ViewModels
-
-`ui/navigation/CineMoraDestination.kt` declara `Inicio`, `Lista`, `AgregarContenido`, `Perfil`, `Detalle`, `Reproductor` y `Trailer`. Navigation Compose serializa internamente las rutas tipadas. `Detalle`, `Reproductor` y `Trailer` reciben solo `contenidoId` y `contenidoTipo`; no transportan el objeto `Contenido` completo.
-
-Al entrar en una de esas rutas, `CineMoraApp.kt` usa `CineRepository.obtenerContenido(id, tipo)` para recuperar la versión actual. El repositorio busca primero en `catalogo` y después en `miLista`. Si no existe, `DetalleScreen`, `VideoPlayerScreen` y `TrailerPlayerScreen` muestran **Contenido no encontrado** y permiten volver con `navigateUp()`.
-
-- `HomeViewModel.kt`: expone `CineRepository.catalogo` y `miLista`. Tiene `actualizarCatalogo()`, pero `HomeScreen` no lo invoca actualmente.
-- `DetalleViewModel.kt`: expone `miLista` y, en `alternarGuardado`, llama a `agregarAMiLista` o `quitarDeMiLista`.
-- `MiListaViewModel.kt`: expone `miLista` como `contenidos` y delega la eliminación al repositorio.
-- `AgregarContenidoViewModel.kt`: conserva `titulo` y `esError`. `guardar()` valida texto, agrega el contenido local, limpia el campo y devuelve si tuvo éxito.
-- `TrailerPlayerViewModel.kt`: conserva `videoId` y `cargando`. Reutiliza `trailerYoutubeId` o consulta TMDB con `tmdbId` desde `viewModelScope`.
-- `VideoPlayerViewModel.kt`: conserva un mensaje `error`, que se asigna si ExoPlayer informa fallo.
-
-### Pantallas
-
-- `CineMoraApp.kt` es el contenedor y grafo de navegación: crea `NavHostController`, presenta `NavHost(startDestination = Inicio)` y obtiene los argumentos con `backStackEntry.toRoute<T>()`. La barra inferior solo se muestra en Inicio, Mi lista y Agregar; usa `popUpTo`, `saveState`, `restoreState` y `launchSingleTop` al cambiar entre esos destinos.
-- `HomeScreen.kt` observa catálogo y lista, usa `LazyVerticalGrid`, abre detalle al tocar la tarjeta y muestra **En lista** para elementos guardados. **Ver perfil** dispara su callback.
-- `DetalleScreen.kt` muestra el modelo elegido, observa si está guardado, alterna la lista y presenta acciones de reproducir, tráiler y búsqueda externa de JustWatch. Los datos visuales Dirección `CineMora`, Audio `Original` y Clasif. `+13 años` son textos fijos; no vienen de TMDB ni de `Contenido`.
-- `MiListaScreen.kt` presenta estado vacío o un `LazyColumn`, abre detalle y elimina. Los chips de filtro y el icono de filtrar no tienen lógica en sus `onClick`; `RecommendationCard()` también es solo visual.
-- `AgregarContenidoScreen.kt` enlaza `OutlinedTextField` con el ViewModel y muestra validación/Snackbar. Sus chips de categorías no modifican el nuevo elemento. Aunque su texto pedagógico menciona `mutableStateOf`, la implementación usa `StateFlow` en el ViewModel.
-- `TrailerPlayerScreen.kt` llama `viewModel.cargar(contenido)` en `LaunchedEffect`, integra `YouTubePlayerView` con `AndroidView`, observa el ciclo de vida y libera el reproductor en `DisposableEffect`.
-- `VideoPlayerScreen.kt` crea ExoPlayer con `contenido?.videoUrl`, lo muestra en `PlayerView`, mantiene la pantalla encendida mientras está abierto y libera recursos al salir.
-- `ProfileScreen.kt` recibe siempre `"usuario_demo"` desde `CineMoraApp`; no usa usuario, repositorio ni autenticación reales.
-
-### Componentes, tema y entrada
-
-`CineComponents.kt` concentra los colores `Fondo`, `Tarjeta`, `Morado` y `TextoSecundario`, además de:
-
-- `BrandHeader()`: cabecera visual. El avatar no recibe clic; el acceso funcional al perfil está en Inicio.
-- `Titulo(...)`: título/subtítulo reutilizable, definido pero no invocado por las pantallas revisadas.
-- `Poster(...)`: usa Coil `AsyncImage` si hay URL, recurso local si hay `posterRes` o un icono de reserva.
-
-`ui/theme/Theme.kt` define `CinemoraTheme`, con esquemas de `Color.kt` y `Typography` de `Type.kt`. En Android 12 o superior el color dinámico se activa por defecto. Algunas pantallas usan directamente los colores de `CineComponents.kt`, por lo que no todo el diseño depende de MaterialTheme.
-
-`MainActivity.kt` conecta Android con Compose:
-
-```kotlin
-setContent {
-    CinemoraTheme {
-        CineMoraApp()
-    }
-}
-```
-
-## 5. Flujo de navegación y estado
-
-1. `CineMoraApp` crea un `NavHost` con `Inicio` como destino inicial.
-2. La barra inferior navega con rutas tipadas `Inicio`, `Lista` o `AgregarContenido`. Su configuración elimina destinos superiores hasta Inicio, evita duplicados y restaura su estado guardado.
-3. Una tarjeta de Inicio o Mi lista navega a `Detalle(contenido.id, contenido.tipo)`.
-4. El destino recupera el objeto con `CineRepository.obtenerContenido`. Desde Detalle, **Reproducir película** navega a `Reproductor(id, tipo)` y **Ver tráiler** a `Trailer(id, tipo)`.
-5. `NavController.navigateUp()` devuelve desde Perfil al origen, desde Detalle a Inicio o Mi lista según el recorrido y desde reproductor/tráiler a Detalle. El botón físico Atrás de los reproductores usa el mismo comportamiento.
-
-Las rutas solo conservan argumentos simples. Si el contenido no está en catálogo ni en Mi lista, las tres pantallas dependientes de contenido muestran **Contenido no encontrado** en vez de intentar usar datos nulos.
-
-Las pantallas convierten los flujos a estado Compose:
-
-```kotlin
-val catalogo by viewModel.catalogo.collectAsStateWithLifecycle()
-val lista by viewModel.miLista.collectAsStateWithLifecycle()
-```
-
-Cuando el repositorio cambia una lista, todos los composables que observan ese flujo se recomponen. Los ViewModels de Inicio, Detalle y Mi lista no guardan copias distintas: exponen los mismos flujos del repositorio.
-
-## 6. Caso práctico paso a paso
-
-### Abrir, seleccionar y guardar una película
-
-1. Android lee `AndroidManifest.xml` y abre `MainActivity`.
-2. `MainActivity.onCreate()` ejecuta `CinemoraTheme { CineMoraApp() }`.
-3. `NavHost` inicia con la ruta tipada `Inicio`, por lo que aparece `HomeScreen`.
-4. `HomeViewModel` referencia `CineRepository.catalogo`. El repositorio ya tiene datos locales e inicia su actualización TMDB en segundo plano; no hay indicador de carga o error para esa actualización.
-5. La persona toca una tarjeta de `HomeScreen`. `onAbrir(item)` navega a `Detalle(item.id, item.tipo)`.
-6. El `NavHost` obtiene esos argumentos con `toRoute<Detalle>()`, recupera el modelo actual mediante `CineRepository.obtenerContenido` y muestra `DetalleScreen`.
-7. Detalle calcula `guardado = item in lista`. Al tocar **Agregar a Mi lista** llama `DetalleViewModel.alternarGuardado(item, false)`.
-8. Ese ViewModel invoca `CineRepository.agregarAMiLista(item)`, que añade el objeto si no existe la combinación de `id` y `tipo`.
-9. `_miLista` emite el nuevo valor: Detalle muestra **Quitar de Mi lista**, Inicio puede mostrar la marca **En lista** y Mi lista presenta la tarjeta cuando se navega a ella.
-
-### Quitar y agregar contenido
-
-Para quitar, Detalle llama `alternarGuardado(item, true)` o Mi lista llama `MiListaViewModel.quitar(item)`; ambos llegan a `CineRepository.quitarDeMiLista` y recomponen la lista.
-
-Para agregar al catálogo, la barra abre `AgregarContenidoScreen`; el campo llama `cambiarTitulo`, y el botón llama `guardar`. Con texto válido, `CineRepository.agregarContenido` crea un `Contenido` básico, actualiza `catalogo`, limpia el formulario y muestra un Snackbar. Solo se recoge título: no hay formulario de sinopsis, género, tipo o búsqueda inmediata en TMDB.
-
-## 7. Estado actual y limitaciones
-
-### Implementado
-
-- Catálogo local, detalle, Mi lista y creación manual de un título durante la ejecución.
-- Intento de obtener tendencias, pósteres y tráileres desde TMDB.
-- Pósteres locales/remotos, YouTube Player para tráileres y Media3 para elementos con `videoUrl`.
-- Perfil visual fijo y dos pruebas de plantilla, no pruebas funcionales del proyecto.
-
-### Estado no persistente
-
-`CineRepository` mantiene `catalogo` y `miLista` en `MutableStateFlow`. El formulario vive en su ViewModel y la pila de navegación vive en memoria en `NavController`. No hay Room, DataStore, SharedPreferences, archivo de datos ni base de datos remota propia; el código no garantiza conservar lista o contenido agregado al cerrar el proceso.
-
-### Diferencias importantes entre README y código
-
-| README / diseño descrito | Evidencia actual |
+# Arquitectura y flujo de CineMora
+
+## Estructura real
+
+~~~text
+com.example.cinemora/
+├── data/
+│   ├── api/
+│   │   └── TmdbApi.kt
+│   ├── dto/
+│   │   └── TmdbDtos.kt
+│   ├── network/
+│   │   └── TmdbNetwork.kt
+│   └── repository/
+│       ├── AppContainer.kt
+│       ├── CatalogoRepository.kt
+│       ├── TmdbCatalogoRepository.kt
+│       ├── MiListaRepository.kt
+│       └── Contenido.kt
+├── presentation/
+│   ├── components/
+│   │   └── CineComponents.kt
+│   ├── navigation/
+│   │   └── CineMoraDestination.kt
+│   ├── screens/
+│   │   ├── CineMoraApp.kt
+│   │   ├── HomeScreen.kt
+│   │   ├── DetalleScreen.kt
+│   │   ├── MiListaScreen.kt
+│   │   ├── AgregarContenidoScreen.kt
+│   │   ├── TrailerPlayerScreen.kt
+│   │   └── ProfileScreen.kt
+│   └── viewmodel/
+│       ├── HomeViewModel.kt
+│       ├── DetalleViewModel.kt
+│       ├── MiListaViewModel.kt
+│       ├── AgregarContenidoViewModel.kt
+│       └── TrailerPlayerViewModel.kt
+├── ui/theme/
+│   ├── Color.kt
+│   ├── Theme.kt
+│   └── Type.kt
+└── MainActivity.kt
+~~~
+
+## Responsabilidades
+
+| Capa | Responsabilidad |
 | --- | --- |
-| Retrofit + Kotlin Serialization para acceso remoto | No hay Retrofit. Kotlin Serialization se usa ahora para rutas tipadas, mientras TMDB sigue empleando `HttpURLConnection` y `org.json`. |
-| Room para Mi lista | No hay dependencia, entidad, DAO ni base de datos. La lista es un `MutableStateFlow`. |
-| DataStore para preferencias | No hay dependencia ni uso de DataStore. Perfil no guarda preferencias. |
-| Modelo relacional Usuario, Lista personal, Género y Elemento lista | No existen clases ni tablas para esas entidades; el modelo implementado es `Contenido`. |
-| Detalle, lista personal y catálogo | Sí existen, con los límites de datos locales/en memoria descritos. |
+| presentation/screens | Dibuja Compose y reacciona a estados, sin llamar HTTP. |
+| presentation/viewmodel | Inicia casos de uso con viewModelScope y expone StateFlow. |
+| data/repository | Define contratos, traduce DTO a Contenido, conserva el último catálogo y modela errores. |
+| data/api | Declara los endpoints Retrofit de TMDB. |
+| data/network | Configura base URL, Json de Kotlinx Serialization, OkHttp y el encabezado Bearer. |
+| data/dto | Representa JSON real de TMDB con Serializable y SerialName. |
 
-### Límites observables
+AppContainer realiza la inyección manual de las dos implementaciones actuales. Esto evita que las pantallas construyan clientes de red o repositorios.
 
-- La UI no informa fallo o carga de TMDB; los errores se absorben y se conservan datos locales o se obtienen listas vacías.
-- TMDB depende de una credencial local correcta y de red; este documento no afirma que la consulta funcione en un dispositivo.
-- Reproducir depende de una URL externa disponible; solamente cuatro contenidos iniciales tienen `videoUrl`.
-- Filtros, recomendación, chips de categorías y avatar son elementos visuales sin acción funcional actual.
-- **Dónde ver** abre una búsqueda externa de JustWatch; no obtiene resultados dentro de CineMora.
-- La navegación conserva historial solo mientras el proceso esté activo; no hay persistencia de la pila ni del perfil, que tampoco representa autenticación o usuario real.
+## Recorrido de Inicio
 
-## 8. Conclusión
+~~~mermaid
+flowchart LR
+    HS[HomeScreen] -->|observa uiState| HVM[HomeViewModel]
+    HVM -->|viewModelScope| CR[CatalogoRepository]
+    CR -->|implementación| TR[TmdbCatalogoRepository]
+    TR --> API[TmdbApi Retrofit]
+    API --> NET[TmdbNetwork + OkHttp]
+    NET --> TMDB[TMDB /3/trending/all/day]
+    TMDB -->|JSON| DTO[TmdbTrendingResponseDto]
+    DTO -->|mapeo| TR
+    TR -->|Exito / Vacio / Error| HVM
+    HVM -->|StateFlow HomeUiState| HS
+~~~
 
-El avance se organiza en un flujo claro: `MainActivity` inicia Compose; `CineMoraApp` declara el `NavHost` con rutas tipadas; los ViewModels median las acciones de cada pantalla; `CineRepository` comparte catálogo y lista mediante `StateFlow`; y `Contenido` conecta datos, UI y TMDB. Esta base permite estudiar cómo una modificación central se refleja de forma reactiva en varias pantallas.
+1. HomeViewModel inicia cargarCatalogo() al crearse y publica Cargando.
+2. TmdbCatalogoRepository comprueba que exista el token y llama al endpoint Retrofit.
+3. Retrofit usa OkHttp para enviar el Bearer y Kotlinx Serialization para deserializar los DTO.
+4. El repositorio mapea películas y series a Contenido, sin mezclar títulos locales.
+5. El ViewModel publica Exito, Vacio o Error. HomeScreen compone el estado correspondiente y permite reintentar los dos últimos casos.
 
-El README plantea una arquitectura futura más amplia. Para llegar a ella todavía haría falta implementar persistencia, preferencias, las entidades relacionales y la capa HTTP indicada allí. La presente documentación diferencia esas propuestas de las funciones identificadas en el código actual.
+Los mensajes HTTP distinguen, entre otros, 401/403 (credencial), 429 (límite de TMDB) y problemas de conexión. El interceptor no registra la cabecera ni el token.
+
+## Navegación y detalle
+
+Las rutas de CineMoraDestination.kt se mantienen tipadas con Serializable. Inicio y Mi lista navegan con Detalle(id, tipo), y Detalle abre Trailer(id, tipo). El objeto completo no se serializa en la ruta; DetalleViewModel lo recupera del catálogo obtenido en la sesión.
+
+~~~mermaid
+flowchart TD
+    I[Inicio] -->|Detalle id/tipo| D[Detalle]
+    L[Mi lista] -->|Detalle id/tipo| D
+    D -->|Trailer id/tipo| T[Tráiler]
+    D -->|navigateUp| I
+    T -->|navigateUp| D
+~~~
+
+TrailerPlayerViewModel consulta movie/{id}/videos o tv/{id}/videos, elige preferentemente un tráiler oficial de YouTube y comunica Cargando, Disponible, NoDisponible o Error. La pantalla no inventa identificadores de video.
+
+## Credencial y demostración en clase
+
+1. Mantén TMDB_ACCESS_TOKEN en local.properties, nunca en Kotlin.
+2. Sincroniza, ejecuta y activa conexión.
+3. En Inicio observa el indicador de carga y luego tarjetas que cambian al consultar tendencias de TMDB.
+4. Abre un detalle: título, póster, sinopsis, género y puntuación proceden del DTO remoto.
+5. Pulsa **Ver tráiler** para demostrar el segundo endpoint.
+6. Desactiva la red o reemplaza temporalmente el token local por un valor inválido: Inicio debe mostrar un error y **Reintentar**, sin títulos de ejemplo.
+
+No copies una credencial al README, capturas ni consola.
+
+## Límites deliberados
+
+TMDB es una fuente de metadatos y no da una URL de reproducción completa. Por eso se eliminó el reproductor de archivos Archive.org y se conserva únicamente el tráiler entregado por TMDB.
+
+MiListaEnMemoriaRepository demuestra el flujo reactivo de agregar/quitar durante la ejecución, pero no es persistencia. No modifica el catálogo remoto. La pantalla **Agregar** aclara que una operación CRUD propia quedaría pendiente hasta que se autorice Room o un backend; por ese motivo tampoco se incorpora el CRUD que un ejemplo como AutoRent podría requerir.

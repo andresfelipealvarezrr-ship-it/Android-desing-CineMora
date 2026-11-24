@@ -1,99 +1,59 @@
 # CineMora
 
-Proyecto de diseño de una aplicación Android para consultar contenido cinematográfico, organizar listas personales y guardar preferencias.
+Aplicación Android en Jetpack Compose que muestra películas y series reales del endpoint de tendencias de TMDB. La interfaz conserva rutas tipadas de Navigation Compose y organiza el código por capas MVVM.
 
-## Navegación actual
+## Arquitectura aplicada
 
-La aplicación usa Navigation Compose con rutas tipadas y `@Serializable`. Los destinos implementados son Inicio, Mi lista, Agregar contenido, Detalle, Perfil, Reproductor y Tráiler. Las rutas de contenido solo llevan su `id` y `tipo`; `CineRepository` recupera el objeto actual y las pantallas muestran un estado de contenido no encontrado si no puede recuperarse.
+La fuente del catálogo es exclusivamente TMDB. No hay películas escritas a mano ni enlaces de video de Archive.org.
 
-## Prototipo UI/UX
+~~~mermaid
+sequenceDiagram
+    participant H as HomeScreen
+    participant V as HomeViewModel
+    participant R as TmdbCatalogoRepository
+    participant A as TmdbApi (Retrofit)
+    participant T as API TMDB
 
-Ver prototipo en [Google Stitch](https://stitch.withgoogle.com/projects/10239007104782718379)
+    H->>V: observa uiState: StateFlow
+    V->>R: obtenerCatalogo()
+    R->>A: obtenerTendencias()
+    A->>T: GET /3/trending/all/day
+    T-->>A: JSON
+    A-->>R: DTO serializables
+    R-->>V: Exito, Vacio o Error
+    V-->>H: HomeUiState
+~~~
 
-Ver diagrama en [Mermaid Live Editor](https://mermaid.live/edit#pako:eNptUctOwzAQ_BVrTyCSKg3Oy-KCWipx4MQNVUJuYlIrsV38UEtL_53EkFBafLFn1jOeXR-gVBUDAmVLjZlzWmsqlhJ1615yQVt09xmGaO7K5pJdcLO-ZF_YStM_NEE3XFpEa3ZOP1vNZY1qJiumT4u9xDxR0R2vrs8Kglo2kD62j3f4JtBoumK0malW6bFgtlwMwg6-O1o2Az6e-vWNjX5hn93wPXuUC8bsSJdUPlD7r96P4DfQSqkWcfO65W01ktrJUQsB1JpXQKx2LADBtKA9BO-xBLtmgi2BdEfNKrcLK6qbsPTNwVL2-g2VL0qJwUIrV6-BvNHWdMhtqm5mP787XvFDnyknLZA49hZADrADMs3jSREXcbenCY5wEcAHkCSbFEWGC5ynWY6LaY6PAez9o9EkxbdpjtN8GmdREkfJ8Qtl0bQM)
+El detalle y los tráileres siguen la misma separación. La pantalla de tráiler solicita a su ViewModel; este pide al repositorio el video de TMDB y solo reproduce una clave oficial de YouTube cuando la API la entrega.
 
-## Diagrama entidad-relación
+## Configuración
 
-```mermaid
-erDiagram
-    USUARIO {
-        int id_usuario PK
-        string nombre
-        datetime fecha_creacion
-    }
+1. Abre el proyecto con Android Studio y espera la sincronización de Gradle.
+2. En el archivo local local.properties, agrega tu token de lectura de TMDB (v4):
 
-    LISTA_PERSONAL {
-        int id_lista PK
-        int id_usuario FK
-        string nombre
-        datetime fecha_creacion
-    }
+   ~~~properties
+   TMDB_ACCESS_TOKEN=pega_aqui_tu_token_v4
+   ~~~
 
-    CONTENIDO {
-        int id_contenido PK
-        int id_tmdb
-        string titulo
-        string tipo
-        string sinopsis
-        string fecha_lanzamiento
-        float puntuacion
-        string poster_path
-    }
+3. No subas ese archivo: el repositorio lo ignora con .gitignore.
+4. Ejecuta la app y abre **Inicio**. El encabezado “CATÁLOGO EN VIVO · TMDB” y las tarjetas con títulos actuales confirman que la respuesta viene de la API.
 
-    GENERO {
-        int id_genero PK
-        string nombre
-    }
+El token se transforma en BuildConfig.TMDB_ACCESS_TOKEN durante la compilación. No se deja escrito en Kotlin ni se imprime en logs.
 
-    ELEMENTO_LISTA {
-        int id_elemento PK
-        int id_lista FK
-        int id_contenido FK
-        string estado
-        datetime fecha_agregado
-    }
+## Estados de Inicio
 
-    CONTENIDO_GENERO {
-        int id_contenido FK
-        int id_genero FK
-    }
+- **Cargando:** se muestra mientras Retrofit consulta TMDB.
+- **Éxito:** se muestran películas y series de la respuesta.
+- **Vacío:** se explica que TMDB respondió sin elementos.
+- **Error:** se informa una credencial ausente/rechazada, falta de conexión u otro error HTTP, con botón **Reintentar**.
 
-    USUARIO ||--o{ LISTA_PERSONAL : posee
-    LISTA_PERSONAL ||--o{ ELEMENTO_LISTA : contiene
-    CONTENIDO ||--o{ ELEMENTO_LISTA : aparece_en
-    CONTENIDO ||--o{ CONTENIDO_GENERO : se_clasifica_por
-    GENERO ||--o{ CONTENIDO_GENERO : agrupa
-```
+No se presentan elementos de ejemplo como reemplazo de una consulta fallida.
 
-## Diagrama de arquitectura
+## Alcance de las acciones
 
-```mermaid
-flowchart TD
-    A[Usuario] --> B[UI: Jetpack Compose]
-    B --> C[Navigation Compose]
-    C --> D[Rutas tipadas @Serializable]
-    D --> E[Pantallas]
-    E --> F[ViewModel]
-    F --> G[CineRepository]
-    G --> H[StateFlow: catálogo y Mi lista]
-    G --> I[TmdbApiService]
-    I --> J[HttpURLConnection y JSON]
-    J --> K[API de TMDB]
-```
+- **Mi lista:** se puede agregar o quitar un título real de TMDB durante la sesión actual. Es un StateFlow en memoria: no modifica TMDB y se pierde al cerrar el proceso.
+- **Agregar:** permanece como destino de navegación, pero informa que TMDB no permite crear títulos desde esta app. Crear, editar o eliminar datos de forma persistente requeriría una fuente propia (Room o backend), que no forma parte de esta entrega.
+- **Reproducir película:** se retiró porque TMDB no proporciona enlaces de streaming completos y el antiguo catálogo local ya no existe. **Ver tráiler** permanece cuando TMDB devuelve un video de YouTube.
+- **Dónde ver:** abre una búsqueda externa de JustWatch; no representa reproducción dentro de CineMora.
 
-## Pantallas planificadas
-
-1. Inicio y exploración de películas o series.
-2. Detalle de contenido: título, sinopsis, géneros, puntuación y póster.
-3. Lista personal del usuario.
-4. Preferencias de la aplicación.
-
-## Recursos provenientes de la API TMDB
-
-- Películas y series.
-- Títulos.
-- Sinopsis.
-- Fecha de lanzamiento.
-- Puntuación.
-- Póster.
-- Géneros.
+Consulta [docs/arquitectura_y_flujo.md](docs/arquitectura_y_flujo.md) para la estructura y el recorrido técnico completo.

@@ -1,0 +1,4 @@
+# Copia estas claves a local.properties y reemplaza el valor del token.
+# No subas local.properties al control de versiones.
+sdk.dir=RUTA_A_TU_ANDROID_SDK
+TMDB_ACCESS_TOKEN=PEGA_AQUI_TU_TOKEN_DE_LECTURA_TMDB_V4
